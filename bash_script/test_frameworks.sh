@@ -28,17 +28,19 @@ echo "--- Initializing Hardware State on remote server ---"
 ssh "$SERVER" "sh /root/performance.sh && sh /root/noturbo.sh && rm -f $MASTER_REMOTE_PATH"
 
 # --------------------------------------------------
-# [STEP 0] Baseline
+# [STEP 0] Baseline Idle Measurement
 # --------------------------------------------------
 echo ""
 echo "======================================"
-echo "Measuring BASELINE Power (Idle)"
+echo "Step 0: Measuring BASELINE Power (Idle)"
+echo "Duration: ${BASELINE_DURATION}s"
 echo "======================================"
 
 ssh "$SERVER" 'rc-service php-fpm83 restart && rc-service apache2 restart'
 sleep 5
 
 BASE_PID=$(ssh "$SERVER" "nohup sh /root/raplog.sh -o $MASTER_REMOTE_PATH -i 1 -t baseline > /dev/null 2>&1 & echo \$!")
+echo "Baseline Logger PID: $BASE_PID. Waiting..."
 sleep "$BASELINE_DURATION"
 ssh "$SERVER" "kill $BASE_PID"
 
@@ -47,7 +49,6 @@ ssh "$SERVER" "kill $BASE_PID"
 # --------------------------------------------------
 BASE_URL="http://${SERVER_HOST}/phpfs/framework"
 
-# Keep your multiline strings
 urls="
   ${BASE_URL}/ci4/public/
   ${BASE_URL}/fat-free/
@@ -58,17 +59,14 @@ urls="
 "
 names="ci4 fat-free laminas laravel symfony yii"
 
-# POSIX-friendly loop: Iterate through the names string
 count=1
 for name in $names; do
-  # 1. Extract the raw line from the urls string
-  # 2. Use xargs to TRIM leading/trailing spaces
   url=$(echo "$urls" | sed -n "$((count + 1))p" | xargs)
 
   echo ""
   echo "======================================"
   echo "Testing framework: $name"
-  echo "URL: <$url>"
+  echo "URL: $url"
   echo "======================================"
 
   ssh "$SERVER" 'rc-service php-fpm83 restart && rc-service apache2 restart'
@@ -80,10 +78,15 @@ for name in $names; do
   start_time=$(date +%s)
   end_time=$((start_time + TEST_DURATION))
 
-  while [ "$(date +%s)" -lt "$end_time" ]; do
-    curl -s -o /dev/null -w "%{http_code} " "$url"
+  req_count=0
+  while [ "$(date +%s)" -le "$end_time" ]; do
+    # Perform request and capture status code
+    status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+    req_count=$((req_count + 1))
+    printf "\rStatus: %s | Request: %d" "$status" "$req_count"
     sleep "$REQUEST_DELAY"
   done
+  echo "" # New line after loop finishes
 
   ssh "$SERVER" "kill $RAPL_PID"
 
