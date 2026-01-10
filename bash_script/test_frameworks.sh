@@ -20,6 +20,10 @@ fi
 SERVER_HOST="${SERVER#*@}"
 mkdir -p "$OUTPUT_FOLDER"
 MASTER_REMOTE_PATH="/tmp/raplog_${TEST_NAME}.csv"
+EVENT_LOG="$OUTPUT_FOLDER/${TEST_NAME}_events.csv"
+
+# Initialize Event Log with Header
+echo "timestamp,event,request_num,status" > "$EVENT_LOG"
 
 # --------------------------------------------------
 # [PRE-TEST SETUP]
@@ -33,22 +37,22 @@ ssh "$SERVER" "sh /root/performance.sh && sh /root/noturbo.sh && rm -f $MASTER_R
 echo ""
 echo "======================================"
 echo "Step 0: Measuring BASELINE Power (Idle)"
-echo "Duration: ${BASELINE_DURATION}s"
 echo "======================================"
+echo "$(date +"%Y-%m-%d %H:%M:%S"),baseline_start,0,0" >> "$EVENT_LOG"
 
 ssh "$SERVER" 'rc-service php-fpm83 restart && rc-service apache2 restart'
 sleep 5
 
 BASE_PID=$(ssh "$SERVER" "nohup sh /root/raplog.sh -o $MASTER_REMOTE_PATH -i 1 -t baseline > /dev/null 2>&1 & echo \$!")
-echo "Baseline Logger PID: $BASE_PID. Waiting..."
 sleep "$BASELINE_DURATION"
 ssh "$SERVER" "kill $BASE_PID"
+
+echo "$(date +"%Y-%m-%d %H:%M:%S"),baseline_end,0,0" >> "$EVENT_LOG"
 
 # --------------------------------------------------
 # [FRAMEWORK TESTS]
 # --------------------------------------------------
 BASE_URL="http://${SERVER_HOST}/phpfs/framework"
-
 urls="
   ${BASE_URL}/ci4/public/
   ${BASE_URL}/fat-free/
@@ -66,7 +70,6 @@ for name in $names; do
   echo ""
   echo "======================================"
   echo "Testing framework: $name"
-  echo "URL: $url"
   echo "======================================"
 
   ssh "$SERVER" 'rc-service php-fpm83 restart && rc-service apache2 restart'
@@ -74,28 +77,36 @@ for name in $names; do
 
   RAPL_PID=$(ssh "$SERVER" "nohup sh /root/raplog.sh -o $MASTER_REMOTE_PATH -i 1 -t $name > /dev/null 2>&1 & echo \$!")
 
-  echo "[Load] Sending requests for ${TEST_DURATION}s..."
   start_time=$(date +%s)
   end_time=$((start_time + TEST_DURATION))
-
   req_count=0
+
   while [ "$(date +%s)" -le "$end_time" ]; do
-    # Perform request and capture status code
+    ts=$(date +"%Y-%m-%d %H:%M:%S")
     status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
     req_count=$((req_count + 1))
+
+    # Log the event locally
+    echo "$ts,$name,$req_count,$status" >> "$EVENT_LOG"
+
     printf "\rStatus: %s | Request: %d" "$status" "$req_count"
     sleep "$REQUEST_DELAY"
   done
-  echo "" # New line after loop finishes
+  echo ""
 
   ssh "$SERVER" "kill $RAPL_PID"
-
   count=$((count + 1))
   sleep 5
 done
 
+# --------------------------------------------------
+# [FINAL STEP] Download Power Log
+# --------------------------------------------------
 echo ""
 echo "======================================"
-echo "Downloading $MASTER_REMOTE_PATH"
+echo "Downloading Power Log..."
 scp "$SERVER:$MASTER_REMOTE_PATH" "$OUTPUT_FOLDER/${TEST_NAME}_rapl.csv"
-echo "Done. Final log: $OUTPUT_FOLDER/${TEST_NAME}_rapl.csv"
+
+echo "Research Data Collected:"
+echo "1. Power Data:  $OUTPUT_FOLDER/${TEST_NAME}_rapl.csv"
+echo "2. Event Data:  $EVENT_LOG"
