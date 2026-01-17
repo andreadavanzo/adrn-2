@@ -1,4 +1,4 @@
-# Aditus Development Research Notes - 2 (ADRN-2)
+# Audax Development Research Notes - 2 (ADRN-2)
 ## Measuring Energy Efficiency of Architectural Complexity in PHP Frameworks
 
 **Author:** Andrea Davanzo
@@ -24,7 +24,7 @@ Building upon the **Accidental Complexity Score (ACS)** defined in my previous w
 * `VERSION`: Current version of the dataset and scripts.
 
 ## Methodology & Framework Setup
-The frameworks used in this study are the same as those in [ADRN-1 (Davanzo, 2025)](https://doi.org/10.5281/zenodo.17690007).
+The frameworks used in this study are the same as those in [Audax Development Research Notes - 1 (ADRN-1)](https://doi.org/10.5281/zenodo.17690007).
 
 **Key modifications for energy measurement:**
 1. **Instrumentation Removal:** All calls to the previous measurement function (`cesp_log()`) were removed to eliminate I/O and CPU noise, ensuring RAPL readings reflect only the framework's native overhead.

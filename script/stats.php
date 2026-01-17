@@ -1,6 +1,6 @@
 <?php
 #
-# Aditus Development Research Notes - 2
+# Audax Development Research Notes - 2
 # https://github.com/andreadavanzo/adrn-2
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (c) Andrea Davanzo
